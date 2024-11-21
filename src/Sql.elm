@@ -1,8 +1,16 @@
-module Sql exposing (..)
+module Sql exposing (
+    Query, Column, NoDefault, Default, ColumnType, Table, column, table, Operator(..),
+    delete, createColumn, createDefault, create, updateField, update, field, select,
+    where_, innerJoin, from, QueryInfo(..), DeleteQueryData, SelectQueryData,
+    UpdateQueryData, CreateQueryData
+  )
 
 import Json.Decode as D
-import Json.Decode.Extra as DE
 import Json.Encode as E
+
+andMap : D.Decoder a -> D.Decoder (a -> b) -> D.Decoder b
+andMap =
+    D.map2 (|>)
 
 type alias TableInfo t =
   { table : t
@@ -216,7 +224,7 @@ field (Table t) toColumn (Field info decoder) =
 
     d =
       decoder
-      |> DE.andMap (D.field name c.decoder)
+      |> andMap (D.field name c.decoder)
 
   in
   Field f d
@@ -254,115 +262,9 @@ where_ toTable toColumn operator fromParam (Select s) =
   }
   |> Select
 
-operatorToString : Operator -> String
-operatorToString operator =
-  case operator of
-    Equals -> "="
-
-selectToString : SelectQueryData t -> String
-selectToString q =
-  [ [ [ "SELECT" ] ]
-  , q.select
-    |> List.map (\s ->
-      [ s.table
-      , ".["
-      , s.column
-      , "] "
-      , s.name
-      ]
-      |> String.join ""
-    )
-    |> String.join ",\n"
-    |> List.singleton
-    |> List.singleton
-  , [ [ "FROM [", q.from, "] ", q.fromAlias ] ]
-  , q.join
-    |> List.map (\j ->
-      [ "INNER JOIN ["
-      , j.table
-      , "] "
-      , j.alias
-      , " ON "
-      , j.alias
-      , "."
-      , j.column
-      , operatorToString j.operator
-      , j.table2
-      , ".["
-      , j.column2
-      , "]"
-      ]
-    )
-  , case q.where_ of
-      first :: rest ->
-        let
-          toW a =
-            [ a.table
-            , ".["
-            , a.column
-            , "]"
-            , operatorToString a.operator
-            , "@"
-            , a.param
-            ]
-        in
-        ("WHERE " :: toW first)
-        :: List.map (\i -> "AND " :: toW i) rest
-      [] -> []
-  ]
-  |> List.map (List.map (String.join ""))
-  |> List.concat
-  |> String.join "\n"
-
-toString : Query t r -> String
-toString q =
-  case q.info of
-    SelectQuery info -> selectToString info
-    UpdateQuery info -> updateToString info
-    CreateQuery info -> createToString info
-    DeleteQuery info -> deleteToString info
-
 type Default = Default
 
 type NoDefault = NoDefault
-
-type alias Person =
-  { id : Column Int Default
-  , name : Column String NoDefault
-  , parent : Column Int NoDefault
-  }
-
-personTable : Table Person Person
-personTable =
-  table "person" Person
-  |> column "id" .id intColumn
-  |> column "name" .name stringColumn
-  |> column "parent" .parent intColumn
-
-type alias TestResult =
-  { id : Int
-  , name : String
-  , parent : String
-  }
-
-type alias TestParameter =
-  { name : String
-  }
-
-query1 : Query TestParameter TestResult
-query1 =
-  from personTable
-  |> innerJoin personTable .id Equals identity .parent
-  |> where_ (\(person, _) -> person) .name Equals .name
-  |> where_ (\(person, _) -> person) .name Equals .name
-  |> select TestResult (\(person, parent) ->
-      field person .id
-      >> field person .name
-      >> field parent .name
-    )
-
-test = toString query1
-
 
 type alias UpdateInfo p =
   { encode : p -> E.Value
@@ -430,39 +332,12 @@ type alias UpdateQueryData p =
   , operator : Operator
   }
 
-updateToString : UpdateQueryData p -> String
-updateToString q =
-  [ "UPDATE "
-  , q.table
-  , " SET\n"
-  , q.updates
-      |> List.map (\u ->
-          [ "["
-          , u.column
-          , "]=@", u.name
-          ]
-          |> String.concat
-        )
-      |> String.join ",\n"
-  , "\nWHERE "
-  , q.column
-  , operatorToString q.operator
-  , "@v"
-  ]
-  |> String.concat
+
 
 type alias UpdateParams =
   { id : Int
   , name : String
   }
-
-testU =
-  update personTable
-    (updateField .name .name
-    )
-    .id
-    Equals
-    .id
 
 type alias CreateQueryData =
   { table : String
@@ -545,55 +420,11 @@ createDefault :
 createDefault toColumn (Create c) =
   Create c
 
-createToString : CreateQueryData -> String
-createToString q =
-  [ "INSERT ["
-  , q.table
-  , "] ("
-  , q.columns |> List.map (\(c, _) -> "[" ++ c ++ "]") |> String.join ","
-  , ")\n"
-  , "OUTPUT INSERTED.["
-  , q.output
-  , "]\n"
-  , "VALUES ("
-  , q.columns
-      |> List.map (\(_, p) -> "@" ++ p)
-      |> String.join ", "
-  , ")"
-  ]
-  |> String.concat
-
-type alias CreateOutput =
-  { id : Int
-  }
-
-testC =
-  create personTable Person (
-    createDefault .id
-    >> createColumn .name .name
-    >> createColumn .parent .parent
-  )
-  CreateOutput
-  .id
-  |> toString
-  
 type alias DeleteQueryData =
   { table : String
   , column : String
   , operator : Operator
   }
-  
-deleteToString : DeleteQueryData -> String
-deleteToString data =
-  [ "DELETE ["
-  , data.table
-  , "] WHERE ["
-  , data.column
-  , "]"
-  , operatorToString data.operator
-  , "@p"
-  ]
-  |> String.concat
   
 delete : 
   Table t t
@@ -617,10 +448,3 @@ delete (Table t) c o p =
       |> E.object
   , resultDecoder = D.succeed {}
   }
-  
-testD =
-  delete personTable
-    .id
-    Equals
-    .id
-  |> toString
