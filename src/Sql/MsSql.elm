@@ -103,6 +103,7 @@ selectToString q =
       ]
     )
   , case q.where_ of
+      [] -> []
       first :: rest ->
         let
           toW a =
@@ -117,7 +118,16 @@ selectToString q =
         in
         ("WHERE " :: toW first)
         :: List.map (\i -> "AND " :: toW i) rest
+  , case q.order of
       [] -> []
+      order ->
+        [ "ORDER BY "
+        , (order 
+            |> List.map (\o -> o.table ++ ".[" ++ o.column ++ "]") 
+            |> String.join ", "
+          )
+        ]
+        |> List.singleton
   ]
   |> List.map (List.map (String.join ""))
   |> List.concat

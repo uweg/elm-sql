@@ -2,7 +2,7 @@ module Sql exposing (
     Query, Column, NoDefault, Default, ColumnType, Table, column, table, Operator(..),
     delete, createColumn, createDefault, create, updateField, update, field, select,
     where_, innerJoin, from, QueryInfo(..), DeleteQueryData, SelectQueryData,
-    UpdateQueryData, CreateQueryData
+    UpdateQueryData, CreateQueryData, order
   )
 
 import Json.Decode as D
@@ -96,6 +96,7 @@ type alias SelectInfo t params =
   , fromAlias : String
   , join : List JoinInfo
   , where_ : List (WhereInfo params)
+  , order : List OrderInfo
   }
 
 type Select p t = Select (SelectInfo t p)
@@ -109,6 +110,7 @@ from (Table t) =
   , fromAlias = "f"
   , join = []
   , where_ = []
+  , order = []
   }
   |> Select
 
@@ -134,6 +136,7 @@ innerJoin (Table j) ( col) operator toTable toColumn (Select t) =
   , from = t.from
   , fromAlias = t.fromAlias
   , where_ = t.where_
+  , order = t.order
   , join =
       { table = j.name
       , alias = alias
@@ -162,6 +165,7 @@ select ctor toR (Select s) =
       , join = s.join
       , select = List.reverse f
       , where_ = List.reverse s.where_
+      , order = List.reverse s.order
       }
       |> SelectQuery
   in
@@ -179,6 +183,7 @@ type alias SelectQueryData params =
   , join : List JoinInfo
   , select : List FieldInfo
   , where_ : List (WhereInfo params)
+  , order : List OrderInfo
   }
 
 type alias Query params result =
@@ -259,6 +264,30 @@ where_ toTable toColumn operator fromParam (Select s) =
       , encode = fromParam >> c.encode
       }
       :: s.where_
+  }
+  |> Select
+
+type alias OrderInfo =
+  { table : String
+  , column : String
+  }
+
+order :
+  (t -> Table t_ t_ ctor)
+  -> (t_ -> Column c default)
+  -> Select p t
+  -> Select p t
+order toTable toColumn (Select s) =
+  let
+    (Table t) = toTable s.select
+    (Column c) = toColumn t.table
+  in
+  { s
+  | order =
+      { table = t.alias
+      , column = c.name
+      } 
+      :: s.order
   }
   |> Select
 

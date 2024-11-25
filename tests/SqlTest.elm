@@ -49,6 +49,7 @@ suite =
               |> Sql.innerJoin personTable .id Sql.Equals identity .parent
               |> Sql.where_ (\(person, _) -> person) .name Sql.Equals .name
               |> Sql.where_ (\(person, _) -> person) .name Sql.Equals .name
+              |> Sql.order (\(person, _) -> person) .name
               |> Sql.select Result (\(person, parent) ->
                   Sql.field person .id
                   >> Sql.field person .name
@@ -63,7 +64,8 @@ j0.[name] r2
 FROM [person] f
 INNER JOIN [person] j0 ON j0.id=f.[parent]
 WHERE f.[name]=@p0
-AND f.[name]=@p1"""
+AND f.[name]=@p1
+ORDER BY f.[name]"""
 
     , test "update" <| \_ ->
         let
