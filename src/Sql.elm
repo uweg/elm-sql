@@ -18,7 +18,7 @@ type alias TableInfo t =
   , alias : String
   }
 
-type Table current t = Table (TableInfo current)
+type Table current t ctor = Table (TableInfo current)
 
 type C result current = C current
 
@@ -43,8 +43,8 @@ column :
   String
   -> (result -> Column current default)
   -> ColumnType current
-  -> Table (Column current default -> next) result
-  -> Table next result
+  -> Table (Column current default -> next) result ctor
+  -> Table next result ctor
 column name _ type_ (Table current) =
   let
     c : Column current default
@@ -61,7 +61,7 @@ column name _ type_ (Table current) =
   }
   |> Table
 
-table : String -> ctor -> Table ctor t
+table : String -> ctor -> Table ctor t ctor
 table name ctor =
   { table = ctor
   , name = name
@@ -101,8 +101,8 @@ type alias SelectInfo t params =
 type Select p t = Select (SelectInfo t p)
 
 from :
-  Table t t
-  -> Select p (Table t t)
+  Table t t ctor
+  -> Select p (Table t t ctor)
 from (Table t) =
   { select = Table {t | alias = "f"}
   , from = t.name
@@ -113,13 +113,13 @@ from (Table t) =
   |> Select
 
 innerJoin :
-  Table j j
+  Table j j ctor
   -> (j -> Column a defaultJ)
   -> Operator
-  -> (t -> Table t_ t_)
+  -> (t -> Table t_ t_ ctor_)
   -> (t_ -> Column a defaultT)
   -> Select p t
-  -> Select p (t, Table j j)
+  -> Select p (t, Table j j ctor)
 innerJoin (Table j) ( col) operator toTable toColumn (Select t) =
   let
     (Table t2) = toTable t.select
@@ -203,7 +203,7 @@ type Field current result
   = Field (List FieldInfo) (D.Decoder current)
 
 field :
-  Table t t
+  Table t t ctor
   -> (t -> Column current default)
   -> Field (current -> next) result
   -> Field next  result
@@ -238,7 +238,7 @@ type alias WhereInfo params =
   }
 
 where_ :
-  (t -> Table t_ t_)
+  (t -> Table t_ t_ ctor)
   -> (t_ -> Column a default)
   -> Operator
   -> (p -> a)
@@ -276,7 +276,7 @@ type Update t p
   = Update (List (t -> UpdateInfo p))
 
 update :
-  Table t t
+  Table t t ctor
   -> (Update t params -> Update t params)
   -> (t -> Column a default)
   -> Operator
@@ -304,9 +304,9 @@ update (Table t) u toColumn operator p =
 
 
 updateField :
-  (t -> Column a default) 
+  (t -> Column a default)
   -> (p -> a)
-  -> Update t p 
+  -> Update t p
   -> Update t p
 updateField toColumn p (Update u) =
   let
@@ -324,15 +324,12 @@ updateField toColumn p (Update u) =
   :: u
   |> Update
 
-
 type alias UpdateQueryData p =
   { table : String
   , updates : List (UpdateInfo p)
   , column : String
   , operator : Operator
   }
-
-
 
 type alias UpdateParams =
   { id : Int
@@ -346,13 +343,12 @@ type alias CreateQueryData =
   }
 
 create :
-  Table t t
-  -> ctor
+  Table t t ctor
   -> (Create params ctor t -> Create params t t)
   -> (a -> result)
   -> (t -> Column a default)
   -> Query params result
-create (Table t) ctor columns toOutput outputColumn =
+create (Table t) columns toOutput outputColumn =
   let
     (Create c) =
       { columns = []
@@ -360,24 +356,24 @@ create (Table t) ctor columns toOutput outputColumn =
       }
       |> Create
       |> columns
-      
+
     (Column oc) = outputColumn t.table
   in
   { info =
       { table = t.name
       , columns =
-          c.columns 
-          |> List.reverse 
+          c.columns
+          |> List.reverse
           |> List.map (\c_ -> (c_.column, c_.parameter))
       , output = oc.name
       }
       |> CreateQuery
-  , encodeParams = \p -> 
+  , encodeParams = \p ->
       c.columns
-      |> List.map (\c_ -> (c_.parameter, c_.encode p)) 
+      |> List.map (\c_ -> (c_.parameter, c_.encode p))
       |> E.object
   , resultDecoder =
-      D.field oc.name oc.decoder 
+      D.field oc.name oc.decoder
       |> D.map toOutput
   }
 
@@ -388,7 +384,7 @@ type alias CreateColumn params =
   }
 
 type Create params current result
-  = Create 
+  = Create
       { result : result
       , columns : List (CreateColumn params)
       }
@@ -404,7 +400,7 @@ createColumn toColumn param (Create c) =
     (Column col) = toColumn c.result
   in
   Create
-    { columns = 
+    { columns =
         { parameter = name
         , encode = \p -> param p |> col.encode
         , column = col.name
@@ -412,7 +408,7 @@ createColumn toColumn param (Create c) =
         :: c.columns
     , result = c.result
     }
-    
+
 createDefault :
   (result -> Column current Default)
   -> Create params (Column current Default -> next) result
@@ -425,9 +421,9 @@ type alias DeleteQueryData =
   , column : String
   , operator : Operator
   }
-  
-delete : 
-  Table t t
+
+delete :
+  Table t t ctor
   -> (t -> Column a default)
   -> Operator
   -> (params -> a)
@@ -444,7 +440,7 @@ delete (Table t) c o p =
       |> DeleteQuery
   , encodeParams = \pa ->
       [ ("p", p pa |> col.encode)
-      ] 
+      ]
       |> E.object
   , resultDecoder = D.succeed {}
   }

@@ -26,7 +26,6 @@ type alias Person =
   , parent : Sql.Column Int Sql.NoDefault
   }
 
-personTable : Sql.Table Person Person
 personTable =
   Sql.table "person" Person
   |> Sql.column "id" .id intColumn
@@ -78,15 +77,15 @@ AND f.[name]=@p1"""
               .id
         in
         MsSql.toString query
-        |> Expect.equal """UPDATE person SET
+        |> Expect.equal """UPDATE [person] SET
 [name]=@p0
-WHERE id=@v"""
+WHERE [id]=@v"""
 
     , test "create" <| \_ ->
         let
           query : Sql.Query { name : String, parent : Int } Int
           query =
-            Sql.create personTable Person (
+            Sql.create personTable (
                 Sql.createDefault .id
                 >> Sql.createColumn .name .name
                 >> Sql.createColumn .parent .parent

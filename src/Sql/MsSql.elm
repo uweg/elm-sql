@@ -9,7 +9,7 @@ toString q =
     Sql.UpdateQuery info -> updateToString info
     Sql.CreateQuery info -> createToString info
     Sql.DeleteQuery info -> deleteToString info
-    
+
 deleteToString : Sql.DeleteQueryData -> String
 deleteToString data =
   [ "DELETE ["
@@ -21,12 +21,12 @@ deleteToString data =
   , "@p"
   ]
   |> String.concat
-  
+
 updateToString : Sql.UpdateQueryData p -> String
 updateToString q =
-  [ "UPDATE "
+  [ "UPDATE ["
   , q.table
-  , " SET\n"
+  , "] SET\n"
   , q.updates
       |> List.map (\u ->
           [ "["
@@ -36,13 +36,14 @@ updateToString q =
           |> String.concat
         )
       |> String.join ",\n"
-  , "\nWHERE "
+  , "\nWHERE ["
   , q.column
+  , "]"
   , operatorToString q.operator
   , "@v"
   ]
   |> String.concat
-  
+
 createToString : Sql.CreateQueryData -> String
 createToString q =
   [ "INSERT ["
@@ -60,7 +61,7 @@ createToString q =
   , ")"
   ]
   |> String.concat
-  
+
 
 operatorToString : Sql.Operator -> String
 operatorToString operator =
