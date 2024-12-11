@@ -1,9 +1,10 @@
 module Sql exposing
     ( Column
     , ColumnType
-    , CreateQueryData
     , Default
     , DeleteQueryData
+    , Direction(..)
+    , InsertQueryData
     , JoinInfo
     , JoinType(..)
     , NoDefault
@@ -14,16 +15,16 @@ module Sql exposing
     , Table
     , UpdateQueryData
     , column
-    , create
-    , createColumn
-    , createDefault
     , delete
     , field
     , from
     , innerJoin
+    , insert
+    , insertColumn
+    , insertDefault
     , leftJoin
     , maybeField
-    , order
+    , orderBy
     , select
     , table
     , update
@@ -67,11 +68,10 @@ type alias ColumnType t =
 
 column :
     String
-    -> (result -> Column current default)
     -> ColumnType current
     -> Table (Column current default -> next) result ctor NormalTable
     -> Table next result ctor NormalTable
-column name _ type_ (Table current) =
+column name type_ (Table current) =
     let
         c : Column current default
         c =
@@ -110,6 +110,7 @@ type Column t default
 
 type Operator
     = Equals
+    | LessOrEquals
 
 
 type alias JoinInfo =
@@ -294,7 +295,7 @@ type alias Query params result =
 type QueryInfo params result
     = SelectQuery (SelectQueryData params)
     | UpdateQuery (UpdateQueryData params)
-    | CreateQuery CreateQueryData
+    | CreateQuery InsertQueryData
     | DeleteQuery DeleteQueryData
 
 
@@ -412,15 +413,22 @@ where_ toTable toColumn operator fromParam (Select s) =
 type alias OrderInfo =
     { table : String
     , column : String
+    , direction : Direction
     }
 
 
-order :
+type Direction
+    = Asc
+    | Desc
+
+
+orderBy :
     (t -> Table t_ t_ ctor table)
     -> (t_ -> Column c default)
+    -> Direction
     -> Select p t
     -> Select p t
-order toTable toColumn (Select s) =
+orderBy toTable toColumn direction (Select s) =
     let
         (Table t) =
             toTable s.select
@@ -432,6 +440,7 @@ order toTable toColumn (Select s) =
         | order =
             { table = t.alias
             , column = c.name
+            , direction = direction
             }
                 :: s.order
     }
@@ -529,26 +538,26 @@ type alias UpdateParams =
     }
 
 
-type alias CreateQueryData =
+type alias InsertQueryData =
     { table : String
     , columns : List ( String, String )
     , output : String
     }
 
 
-create :
+insert :
     Table t t ctor NormalTable
-    -> (Create params ctor t -> Create params t t)
+    -> (Insert params ctor t -> Insert params t t)
     -> (a -> result)
     -> (t -> Column a default)
     -> Query params result
-create (Table t) columns toOutput outputColumn =
+insert (Table t) columns toOutput outputColumn =
     let
-        (Create c) =
+        (Insert c) =
             { columns = []
             , result = t.table
             }
-                |> Create
+                |> Insert
                 |> columns
 
         (Column oc) =
@@ -574,26 +583,26 @@ create (Table t) columns toOutput outputColumn =
     }
 
 
-type alias CreateColumn params =
+type alias InsertColumn params =
     { column : String
     , parameter : String
     , encode : params -> E.Value
     }
 
 
-type Create params current result
-    = Create
+type Insert params current result
+    = Insert
         { result : result
-        , columns : List (CreateColumn params)
+        , columns : List (InsertColumn params)
         }
 
 
-createColumn :
+insertColumn :
     (result -> Column current NoDefault)
     -> (params -> current)
-    -> Create params (Column current NoDefault -> next) result
-    -> Create params next result
-createColumn toColumn param (Create c) =
+    -> Insert params (Column current NoDefault -> next) result
+    -> Insert params next result
+insertColumn toColumn param (Insert c) =
     let
         name =
             "p" ++ (List.length c.columns |> String.fromInt)
@@ -601,7 +610,7 @@ createColumn toColumn param (Create c) =
         (Column col) =
             toColumn c.result
     in
-    Create
+    Insert
         { columns =
             { parameter = name
             , encode = \p -> param p |> col.encode
@@ -612,12 +621,12 @@ createColumn toColumn param (Create c) =
         }
 
 
-createDefault :
+insertDefault :
     (result -> Column current Default)
-    -> Create params (Column current Default -> next) result
-    -> Create params next result
-createDefault toColumn (Create c) =
-    Create c
+    -> Insert params (Column current Default -> next) result
+    -> Insert params next result
+insertDefault toColumn (Insert c) =
+    Insert c
 
 
 type alias DeleteQueryData =

@@ -57,7 +57,7 @@ updateToString q =
         |> String.concat
 
 
-createToString : Sql.CreateQueryData -> String
+createToString : Sql.InsertQueryData -> String
 createToString q =
     [ "INSERT ["
     , q.table
@@ -83,6 +83,9 @@ operatorToString operator =
     case operator of
         Sql.Equals ->
             "="
+
+        Sql.LessOrEquals ->
+            "<="
 
 
 selectToString : Sql.SelectQueryData t -> String
@@ -124,7 +127,10 @@ selectToString q =
         order ->
             [ "ORDER BY "
             , order
-                |> List.map (\o -> o.table ++ ".[" ++ o.column ++ "]")
+                |> List.map
+                    (\o ->
+                        o.table ++ ".[" ++ o.column ++ "] " ++ directionToString o.direction
+                    )
                 |> String.join ", "
             ]
                 |> List.singleton
@@ -132,6 +138,16 @@ selectToString q =
         |> List.map (List.map (String.join ""))
         |> List.concat
         |> String.join "\n"
+
+
+directionToString : Sql.Direction -> String
+directionToString direction =
+    case direction of
+        Sql.Asc ->
+            "ASC"
+
+        Sql.Desc ->
+            "DESC"
 
 
 joinToString : Sql.JoinInfo -> List String

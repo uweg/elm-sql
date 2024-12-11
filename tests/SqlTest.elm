@@ -32,9 +32,9 @@ type alias Person =
 
 personTable =
     Sql.table "person" Person
-        |> Sql.column "id" .id intColumn
-        |> Sql.column "name" .name stringColumn
-        |> Sql.column "parent" .parent intColumn
+        |> Sql.column "id" intColumn
+        |> Sql.column "name" stringColumn
+        |> Sql.column "parent" intColumn
 
 
 type alias Result =
@@ -56,7 +56,7 @@ suite =
                             |> Sql.innerJoin personTable .id Sql.Equals identity .parent
                             |> Sql.where_ (\( person, _ ) -> person) .name Sql.Equals .name
                             |> Sql.where_ (\( person, _ ) -> person) .name Sql.Equals .name
-                            |> Sql.order (\( person, _ ) -> person) .name
+                            |> Sql.orderBy (\( person, _ ) -> person) .name Sql.Asc
                             |> Sql.select Result
                                 (\( person, parent ) ->
                                     Sql.field person .id
@@ -73,7 +73,7 @@ FROM [person] f
 INNER JOIN [person] j0 ON j0.id=f.[parent]
 WHERE f.[name]=@p0
 AND f.[name]=@p1
-ORDER BY f.[name]"""
+ORDER BY f.[name] ASC"""
         , test "left join" <|
             \_ ->
                 let
@@ -111,10 +111,10 @@ WHERE [id]=@v"""
                 let
                     query : Sql.Query { name : String, parent : Int } Int
                     query =
-                        Sql.create personTable
-                            (Sql.createDefault .id
-                                >> Sql.createColumn .name .name
-                                >> Sql.createColumn .parent .parent
+                        Sql.insert personTable
+                            (Sql.insertDefault .id
+                                >> Sql.insertColumn .name .name
+                                >> Sql.insertColumn .parent .parent
                             )
                             identity
                             .id
