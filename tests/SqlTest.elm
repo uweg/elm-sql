@@ -64,8 +64,10 @@ suite =
                                         >> Sql.field parent .name
                                 )
                 in
-                MsSql.toString query
-                    |> Expect.equal """SELECT
+                query
+                    |> Expect.all
+                        [ MsSql.toString
+                            >> Expect.equal """SELECT
 f.[id] r0,
 f.[name] r1,
 j0.[name] r2
@@ -74,6 +76,14 @@ INNER JOIN [person] j0 ON j0.id=f.[parent]
 WHERE f.[name]=@p0
 AND f.[name]=@p1
 ORDER BY f.[name] ASC"""
+                        , .encodeParams
+                            >> (\p -> p { name = "foo" })
+                            >> E.encode 2
+                            >> Expect.equal """{
+  "p1": "foo",
+  "p0": "foo"
+}"""
+                        ]
         , test "left join" <|
             \_ ->
                 let
@@ -86,11 +96,18 @@ ORDER BY f.[name] ASC"""
                                     Sql.maybeField parent .name
                                 )
                 in
-                MsSql.toString query
-                    |> Expect.equal """SELECT
+                query
+                    |> Expect.all
+                        [ MsSql.toString
+                            >> Expect.equal """SELECT
 j0.[name] r0
 FROM [person] f
 LEFT JOIN [person] j0 ON j0.id=f.[parent]"""
+                        , .encodeParams
+                            >> (\p -> p {})
+                            >> E.encode 2
+                            >> Expect.equal "{}"
+                        ]
         , test "update" <|
             \_ ->
                 let
@@ -102,10 +119,20 @@ LEFT JOIN [person] j0 ON j0.id=f.[parent]"""
                             Sql.Equals
                             .id
                 in
-                MsSql.toString query
-                    |> Expect.equal """UPDATE [person] SET
+                query
+                    |> Expect.all
+                        [ MsSql.toString
+                            >> Expect.equal """UPDATE [person] SET
 [name]=@p0
 WHERE [id]=@v"""
+                        , .encodeParams
+                            >> (\p -> p { id = 0, name = "foo" })
+                            >> E.encode 2
+                            >> Expect.equal """{
+  "v": 0,
+  "p0": "foo"
+}"""
+                        ]
         , test "create" <|
             \_ ->
                 let
@@ -119,10 +146,20 @@ WHERE [id]=@v"""
                             identity
                             .id
                 in
-                MsSql.toString query
-                    |> Expect.equal """INSERT [person] ([name],[parent])
+                query
+                    |> Expect.all
+                        [ MsSql.toString
+                            >> Expect.equal """INSERT [person] ([name],[parent])
 OUTPUT INSERTED.[id]
 VALUES (@p0, @p1)"""
+                        , .encodeParams
+                            >> (\p -> p { name = "foo", parent = 1 })
+                            >> E.encode 2
+                            >> Expect.equal """{
+  "p1": 1,
+  "p0": "foo"
+}"""
+                        ]
         , test "delete" <|
             \_ ->
                 let
@@ -133,6 +170,15 @@ VALUES (@p0, @p1)"""
                             Sql.Equals
                             identity
                 in
-                MsSql.toString query
-                    |> Expect.equal """DELETE [person] WHERE [id]=@p"""
+                query
+                    |> Expect.all
+                        [ MsSql.toString
+                            >> Expect.equal """DELETE [person] WHERE [id]=@p"""
+                        , .encodeParams
+                            >> (\p -> p 1)
+                            >> E.encode 2
+                            >> Expect.equal """{
+  "p": 1
+}"""
+                        ]
         ]
