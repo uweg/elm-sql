@@ -210,18 +210,17 @@ testDelete =
         query : Sql.Query Int {}
         query =
             Sql.delete personTable
-                .id
-                Sql.Equals
-                identity
+                (Sql.where_ identity .id Sql.Equals identity)
     in
     query
         |> Expect.all
             [ MsSql.toString
-                >> Expect.equal """DELETE [person] WHERE [id]=@p"""
+                >> Expect.equal """DELETE [person]
+WHERE [id]=@p0"""
             , .encodeParams
                 >> (\p -> p 1)
                 >> E.encode 2
                 >> Expect.equal """{
-  "p": 1
+  "p0": 1
 }"""
             ]

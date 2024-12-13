@@ -291,7 +291,7 @@ type QueryInfo params result
     = SelectQuery (SelectQueryData params)
     | UpdateQuery (UpdateQueryData params)
     | CreateQuery InsertQueryData
-    | DeleteQuery DeleteQueryData
+    | DeleteQuery (DeleteQueryData params)
 
 
 type alias FieldInfo =
@@ -643,34 +643,35 @@ insertDefault toColumn (Insert c) =
     Insert c
 
 
-type alias DeleteQueryData =
+type alias DeleteQueryData p =
     { table : String
-    , column : String
-    , operator : Operator
+    , where_ : List (WhereInfo p)
     }
 
 
 delete :
     Table t t ctor NormalTable
-    -> (t -> Column a default)
-    -> Operator
-    -> (params -> a)
+    -> (UpdateWhere (Table t t ctor NormalTable) params -> UpdateWhere (Table t t ctor NormalTable) params)
     -> Query params {}
-delete (Table t) c o p =
+delete (Table t) where__ =
     let
-        (Column col) =
-            c t.table
+        where___ : List (WhereInfo params)
+        where___ =
+            where__
+                { select = Table t
+                , where_ = []
+                }
+                |> .where_
+                |> List.reverse
     in
     { info =
         { table = t.name
-        , column = col.name
-        , operator = o
+        , where_ = where___
         }
             |> DeleteQuery
     , encodeParams =
         \pa ->
-            [ ( "p", p pa |> col.encode )
-            ]
+            List.map (\w -> ( w.param, w.encode pa )) where___
                 |> E.object
     , resultDecoder = D.succeed {}
     }

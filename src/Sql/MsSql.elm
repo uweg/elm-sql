@@ -19,15 +19,15 @@ toString q =
             deleteToString info
 
 
-deleteToString : Sql.DeleteQueryData -> String
+deleteToString : Sql.DeleteQueryData p -> String
 deleteToString data =
     [ "DELETE ["
     , data.table
-    , "] WHERE ["
-    , data.column
     , "]"
-    , operatorToString data.operator
-    , "@p"
+    , whereToString data.where_
+        |> List.map String.concat
+        |> List.concatMap (\s -> [ "\n", s ])
+        |> String.concat
     ]
         |> String.concat
 
