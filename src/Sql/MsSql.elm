@@ -48,11 +48,9 @@ updateToString q =
                     |> String.concat
             )
         |> String.join ",\n"
-    , "\nWHERE ["
-    , q.column
-    , "]"
-    , operatorToString q.operator
-    , "@v"
+    , whereToString q.where_
+        |> List.map String.concat
+        |> String.join "\n"
     ]
         |> String.concat
 
@@ -87,6 +85,9 @@ operatorToString operator =
         Sql.LessOrEquals ->
             "<="
 
+        Sql.NotEquals ->
+            "<>"
+
 
 selectToString : Sql.SelectQueryData t -> String
 selectToString q =
@@ -102,24 +103,7 @@ selectToString q =
         |> List.singleton
     , [ [ "FROM [", q.from, "] ", q.fromAlias ] ]
     , q.join |> List.map joinToString
-    , case q.where_ of
-        [] ->
-            []
-
-        first :: rest ->
-            let
-                toW a =
-                    [ a.table
-                    , ".["
-                    , a.column
-                    , "]"
-                    , operatorToString a.operator
-                    , "@"
-                    , a.param
-                    ]
-            in
-            ("WHERE " :: toW first)
-                :: List.map (\i -> "AND " :: toW i) rest
+    , whereToString q.where_
     , case q.order of
         [] ->
             []
@@ -138,6 +122,29 @@ selectToString q =
         |> List.map (List.map (String.join ""))
         |> List.concat
         |> String.join "\n"
+
+
+toW : Sql.WhereInfo p -> List String
+toW a =
+    [ a.table
+    , ".["
+    , a.column
+    , "]"
+    , operatorToString a.operator
+    , "@"
+    , a.param
+    ]
+
+
+whereToString : List (Sql.WhereInfo p) -> List (List String)
+whereToString where_ =
+    case where_ of
+        [] ->
+            []
+
+        first :: rest ->
+            ("WHERE " :: toW first)
+                :: List.map (\i -> "AND " :: toW i) rest
 
 
 directionToString : Sql.Direction -> String

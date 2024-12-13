@@ -115,9 +115,7 @@ LEFT JOIN [person] j0 ON j0.id=f.[parent]"""
                     query =
                         Sql.update personTable
                             (Sql.updateField .name .name)
-                            .id
-                            Sql.Equals
-                            .id
+                            (Sql.where_ identity .id Sql.Equals .id)
                 in
                 query
                     |> Expect.all

@@ -14,6 +14,7 @@ module Sql exposing
     , SelectQueryData
     , Table
     , UpdateQueryData
+    , WhereInfo
     , column
     , delete
     , field
@@ -111,6 +112,7 @@ type Column t default
 type Operator
     = Equals
     | LessOrEquals
+    | NotEquals
 
 
 type alias JoinInfo =
@@ -129,7 +131,7 @@ type JoinType
     | LeftJoin
 
 
-type alias SelectInfo t params =
+type alias SelectInfo params t =
     { select : t
     , from : String
     , fromAlias : String
@@ -139,13 +141,9 @@ type alias SelectInfo t params =
     }
 
 
-type Select p t
-    = Select (SelectInfo t p)
-
-
 from :
     Table t t ctor NormalTable
-    -> Select p (Table t t ctor NormalTable)
+    -> SelectInfo p (Table t t ctor NormalTable)
 from (Table t) =
     { select = Table { t | alias = "f" }
     , from = t.name
@@ -154,7 +152,6 @@ from (Table t) =
     , where_ = []
     , order = []
     }
-        |> Select
 
 
 innerJoin :
@@ -163,9 +160,9 @@ innerJoin :
     -> Operator
     -> (t -> Table t_ t_ ctor_ NormalTable)
     -> (t_ -> Column a defaultT)
-    -> Select p t
-    -> Select p ( t, Table j j ctor NormalTable )
-innerJoin (Table j) col operator toTable toColumn (Select t) =
+    -> SelectInfo p t
+    -> SelectInfo p ( t, Table j j ctor NormalTable )
+innerJoin (Table j) col operator toTable toColumn t =
     let
         (Table t2) =
             toTable t.select
@@ -198,7 +195,6 @@ innerJoin (Table j) col operator toTable toColumn (Select t) =
         }
             :: t.join
     }
-        |> Select
 
 
 leftJoin :
@@ -207,9 +203,9 @@ leftJoin :
     -> Operator
     -> (t -> Table t_ t_ ctor_ NormalTable)
     -> (t_ -> Column a defaultT)
-    -> Select p t
-    -> Select p ( t, Table j j ctor MaybeTable )
-leftJoin (Table j) col operator toTable toColumn (Select t) =
+    -> SelectInfo p t
+    -> SelectInfo p ( t, Table j j ctor MaybeTable )
+leftJoin (Table j) col operator toTable toColumn t =
     let
         (Table t2) =
             toTable t.select
@@ -242,15 +238,14 @@ leftJoin (Table j) col operator toTable toColumn (Select t) =
         }
             :: t.join
     }
-        |> Select
 
 
 select :
     ctor
     -> (t -> Field ctor result -> Field result result)
-    -> Select p t
+    -> SelectInfo p t
     -> Query p result
-select ctor toR (Select s) =
+select ctor toR s =
     let
         (Field f resultDecoder) =
             Field [] (D.succeed ctor) |> toR s.select
@@ -384,9 +379,9 @@ where_ :
     -> (t_ -> Column a default)
     -> Operator
     -> (p -> a)
-    -> Select p t
-    -> Select p t
-where_ toTable toColumn operator fromParam (Select s) =
+    -> { s | select : t, where_ : List (WhereInfo p) }
+    -> { s | select : t, where_ : List (WhereInfo p) }
+where_ toTable toColumn operator fromParam s =
     let
         (Table t) =
             toTable s.select
@@ -407,7 +402,6 @@ where_ toTable toColumn operator fromParam (Select s) =
             }
                 :: s.where_
     }
-        |> Select
 
 
 type alias OrderInfo =
@@ -426,9 +420,9 @@ orderBy :
     (t -> Table t_ t_ ctor table)
     -> (t_ -> Column c default)
     -> Direction
-    -> Select p t
-    -> Select p t
-orderBy toTable toColumn direction (Select s) =
+    -> SelectInfo p t
+    -> SelectInfo p t
+orderBy toTable toColumn direction s =
     let
         (Table t) =
             toTable s.select
@@ -444,7 +438,6 @@ orderBy toTable toColumn direction (Select s) =
             }
                 :: s.order
     }
-        |> Select
 
 
 type Default
@@ -466,14 +459,18 @@ type Update t p
     = Update (List (t -> UpdateInfo p))
 
 
+type alias UpdateWhere t params =
+    { select : t
+    , where_ : List (WhereInfo params)
+    }
+
+
 update :
     Table t t ctor NormalTable
     -> (Update t params -> Update t params)
-    -> (t -> Column a default)
-    -> Operator
-    -> (params -> a)
+    -> (UpdateWhere t params -> UpdateWhere t params)
     -> Query params {}
-update (Table t) u toColumn operator p =
+update (Table t) u where__ =
     let
         (Update u_) =
             Update [] |> u
@@ -481,23 +478,37 @@ update (Table t) u toColumn operator p =
         u__ =
             u_ |> List.map (\u___ -> u___ t.table)
 
-        (Column c) =
-            toColumn t.table
+        where___ : List (WhereInfo params)
+        where___ =
+            where__
+                { select = t.table
+                , where_ = []
+                }
+                |> .where_
     in
     { info =
         UpdateQuery
             { table = t.name
             , updates = u__
-            , column = c.name
-            , operator = operator
+            , where_ = where___
             }
     , resultDecoder = D.succeed {}
     , encodeParams =
         \p_ ->
-            ( "v", p p_ |> c.encode )
-                :: (u__ |> List.map (\u___ -> ( u___.name, u___.encode p_ )))
+            (List.map (\w -> ( w.param, w.encode p_ )) where___
+                ++ List.map (\u___ -> ( u___.name, u___.encode p_ )) u__
+            )
                 |> E.object
     }
+
+
+
+{-
+   \p ->
+
+           |> E.object
+
+-}
 
 
 updateField :
@@ -527,8 +538,7 @@ updateField toColumn p (Update u) =
 type alias UpdateQueryData p =
     { table : String
     , updates : List (UpdateInfo p)
-    , column : String
-    , operator : Operator
+    , where_ : List (WhereInfo p)
     }
 
 
