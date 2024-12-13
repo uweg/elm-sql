@@ -50,7 +50,8 @@ updateToString q =
         |> String.join ",\n"
     , whereToString q.where_
         |> List.map String.concat
-        |> String.join "\n"
+        |> List.concatMap (\s -> [ "\n", s ])
+        |> String.concat
     ]
         |> String.concat
 
@@ -127,7 +128,9 @@ selectToString q =
 toW : Sql.WhereInfo p -> List String
 toW a =
     [ a.table
-    , ".["
+        |> Maybe.map (\t -> t ++ ".")
+        |> Maybe.withDefault ""
+    , "["
     , a.column
     , "]"
     , operatorToString a.operator

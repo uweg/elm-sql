@@ -45,7 +45,7 @@ andMap =
 type alias TableInfo t =
     { table : t
     , name : String
-    , alias : String
+    , alias : Maybe String
     }
 
 
@@ -93,7 +93,7 @@ table : String -> ctor -> Table ctor t ctor NormalTable
 table name ctor =
     { table = ctor
     , name = name
-    , alias = ""
+    , alias = Nothing
     }
         |> Table
 
@@ -145,7 +145,7 @@ from :
     Table t t ctor NormalTable
     -> SelectInfo p (Table t t ctor NormalTable)
 from (Table t) =
-    { select = Table { t | alias = "f" }
+    { select = Table { t | alias = Just "f" }
     , from = t.name
     , fromAlias = "f"
     , join = []
@@ -178,7 +178,7 @@ innerJoin (Table j) col operator toTable toColumn t =
     in
     { select =
         ( t.select
-        , Table { j | alias = alias }
+        , Table { j | alias = Just alias }
         )
     , from = t.from
     , fromAlias = t.fromAlias
@@ -189,7 +189,7 @@ innerJoin (Table j) col operator toTable toColumn t =
         , alias = alias
         , column = col j.table |> (\(Column info) -> info.name)
         , operator = operator
-        , table2 = t2.alias
+        , table2 = t2.alias |> Maybe.withDefault ""
         , column2 = c2.name
         , type_ = InnerJoin
         }
@@ -221,7 +221,7 @@ leftJoin (Table j) col operator toTable toColumn t =
     in
     { select =
         ( t.select
-        , Table { j | alias = alias }
+        , Table { j | alias = Just alias }
         )
     , from = t.from
     , fromAlias = t.fromAlias
@@ -232,7 +232,7 @@ leftJoin (Table j) col operator toTable toColumn t =
         , alias = alias
         , column = col j.table |> (\(Column info) -> info.name)
         , operator = operator
-        , table2 = t2.alias
+        , table2 = t2.alias |> Maybe.withDefault ""
         , column2 = c2.name
         , type_ = LeftJoin
         }
@@ -322,7 +322,7 @@ field (Table t) toColumn (Field info decoder) =
             "r" ++ String.fromInt i
 
         f =
-            { table = t.alias
+            { table = t.alias |> Maybe.withDefault ""
             , column = c.name
             , name = name
             }
@@ -352,7 +352,7 @@ maybeField (Table t) toColumn (Field info decoder) =
             "r" ++ String.fromInt i
 
         f =
-            { table = t.alias
+            { table = t.alias |> Maybe.withDefault ""
             , column = c.name
             , name = name
             }
@@ -366,7 +366,7 @@ maybeField (Table t) toColumn (Field info decoder) =
 
 
 type alias WhereInfo params =
-    { table : String
+    { table : Maybe String
     , column : String
     , operator : Operator
     , param : String
@@ -432,7 +432,7 @@ orderBy toTable toColumn direction s =
     in
     { s
         | order =
-            { table = t.alias
+            { table = t.alias |> Maybe.withDefault ""
             , column = c.name
             , direction = direction
             }
@@ -468,7 +468,10 @@ type alias UpdateWhere t params =
 update :
     Table t t ctor NormalTable
     -> (Update t params -> Update t params)
-    -> (UpdateWhere t params -> UpdateWhere t params)
+    ->
+        (UpdateWhere (Table t t ctor NormalTable) params
+         -> UpdateWhere (Table t t ctor NormalTable) params
+        )
     -> Query params {}
 update (Table t) u where__ =
     let
@@ -481,10 +484,11 @@ update (Table t) u where__ =
         where___ : List (WhereInfo params)
         where___ =
             where__
-                { select = t.table
+                { select = Table t
                 , where_ = []
                 }
                 |> .where_
+                |> List.reverse
     in
     { info =
         UpdateQuery
@@ -519,7 +523,7 @@ updateField :
 updateField toColumn p (Update u) =
     let
         name =
-            "p" ++ (List.length u |> String.fromInt)
+            "u" ++ (List.length u |> String.fromInt)
     in
     (\t ->
         let
