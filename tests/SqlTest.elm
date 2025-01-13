@@ -49,6 +49,7 @@ suite =
     describe "SQL"
         [ test "select" <| \_ -> testSelect
         , test "left join" <| \_ -> testLeftJoin
+        , test "multiple join" testMultipleJoin
         , test "update" <| \_ -> testUpdate
         , test "update with multiple wheres" <| \_ -> testUpdateMultipleWhere
         , test "create" <| \_ -> testCreate
@@ -114,6 +115,34 @@ testLeftJoin =
 j0.[name] r0
 FROM [person] f
 LEFT JOIN [person] j0 ON j0.id=f.[parent]"""
+            , .encodeParams
+                >> (\p -> p {})
+                >> E.encode 2
+                >> Expect.equal "{}"
+            ]
+
+
+testMultipleJoin : () -> Expectation
+testMultipleJoin _ =
+    let
+        query : Sql.Query {} Int
+        query =
+            Sql.from personTable
+                |> Sql.innerJoin personTable .id Sql.Equals identity .parent
+                |> Sql.innerJoin personTable .id Sql.Equals (\( p, p1 ) -> p1) .parent
+                |> Sql.select identity
+                    (\( ( p, p1 ), p2 ) ->
+                        Sql.field p2 .id
+                    )
+    in
+    query
+        |> Expect.all
+            [ MsSql.toString
+                >> Expect.equal """SELECT
+j1.[id] r0
+FROM [person] f
+INNER JOIN [person] j0 ON j0.id=f.[parent]
+INNER JOIN [person] j1 ON j1.id=j0.[parent]"""
             , .encodeParams
                 >> (\p -> p {})
                 >> E.encode 2
