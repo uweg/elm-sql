@@ -201,7 +201,7 @@ leftJoin :
     Table j j ctor NormalTable
     -> (j -> Column a defaultJ)
     -> Operator
-    -> (t -> Table t_ t_ ctor_ NormalTable)
+    -> (t -> Table t_ t_ ctor_ joinTable)
     -> (t_ -> Column a defaultT)
     -> SelectInfo p t
     -> SelectInfo p ( t, Table j j ctor MaybeTable )
