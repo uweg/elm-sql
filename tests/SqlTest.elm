@@ -23,22 +23,38 @@ stringColumn =
     }
 
 
+idColumn : (Int -> id) -> (id -> Int) -> Sql.ColumnType id
+idColumn toId fromId =
+    { decoder = D.int |> D.map toId
+    , encode = fromId >> E.int
+    }
+
+
+type PersonId
+    = PersonId Int
+
+
+personIdColumn : Sql.ColumnType PersonId
+personIdColumn =
+    idColumn PersonId (\(PersonId id) -> id)
+
+
 type alias Person =
-    { id : Sql.Column Int Sql.Default
+    { id : Sql.Column PersonId Sql.Default
     , name : Sql.Column String Sql.NoDefault
-    , parent : Sql.Column Int Sql.NoDefault
+    , parent : Sql.Column PersonId Sql.NoDefault
     }
 
 
 personTable =
     Sql.table "person" Person
-        |> Sql.column "id" intColumn
+        |> Sql.column "id" personIdColumn
         |> Sql.column "name" stringColumn
-        |> Sql.column "parent" intColumn
+        |> Sql.column "parent" personIdColumn
 
 
 type alias Result =
-    { id : Int
+    { id : PersonId
     , name : String
     , parent : String
     }
@@ -125,7 +141,7 @@ LEFT JOIN [person] j0 ON j0.id=f.[parent]"""
 testMultipleJoin : () -> Expectation
 testMultipleJoin _ =
     let
-        query : Sql.Query {} Int
+        query : Sql.Query {} PersonId
         query =
             Sql.from personTable
                 |> Sql.innerJoin personTable .id Sql.Equals identity .parent
@@ -153,7 +169,7 @@ INNER JOIN [person] j1 ON j1.id=j0.[parent]"""
 testUpdate : Expectation
 testUpdate =
     let
-        query : Sql.Query { id : Int, name : String } {}
+        query : Sql.Query { id : PersonId, name : String } {}
         query =
             Sql.update personTable
                 (Sql.updateField .name .name)
@@ -166,7 +182,7 @@ testUpdate =
 [name]=@u0
 WHERE [id]=@p0"""
             , .encodeParams
-                >> (\p -> p { id = 0, name = "foo" })
+                >> (\p -> p { id = PersonId 0, name = "foo" })
                 >> E.encode 2
                 >> Expect.equal """{
   "p0": 0,
@@ -178,7 +194,7 @@ WHERE [id]=@p0"""
 testUpdateMultipleWhere : Expectation
 testUpdateMultipleWhere =
     let
-        query : Sql.Query { id : Int, parent : Int, name : String } {}
+        query : Sql.Query { id : PersonId, parent : PersonId, name : String } {}
         query =
             Sql.update personTable
                 (Sql.updateField .name .name)
@@ -194,7 +210,7 @@ testUpdateMultipleWhere =
 WHERE [id]=@p0
 AND [parent]=@p1"""
             , .encodeParams
-                >> (\p -> p { id = 0, parent = 2, name = "foo" })
+                >> (\p -> p { id = PersonId 0, parent = PersonId 2, name = "foo" })
                 >> E.encode 2
                 >> Expect.equal """{
   "p0": 0,
@@ -207,7 +223,7 @@ AND [parent]=@p1"""
 testCreate : Expectation
 testCreate =
     let
-        query : Sql.Query { name : String, parent : Int } Int
+        query : Sql.Query { name : String, parent : PersonId } PersonId
         query =
             Sql.insert personTable
                 (Sql.insertDefault .id
@@ -224,7 +240,7 @@ testCreate =
 OUTPUT INSERTED.[id]
 VALUES (@p0, @p1)"""
             , .encodeParams
-                >> (\p -> p { name = "foo", parent = 1 })
+                >> (\p -> p { name = "foo", parent = PersonId 1 })
                 >> E.encode 2
                 >> Expect.equal """{
   "p1": 1,
@@ -236,7 +252,7 @@ VALUES (@p0, @p1)"""
 testDelete : Expectation
 testDelete =
     let
-        query : Sql.Query Int {}
+        query : Sql.Query PersonId {}
         query =
             Sql.delete personTable
                 (Sql.where_ identity .id Sql.Equals identity)
@@ -247,7 +263,7 @@ testDelete =
                 >> Expect.equal """DELETE [person]
 WHERE [id]=@p0"""
             , .encodeParams
-                >> (\p -> p 1)
+                >> (\p -> p (PersonId 1))
                 >> E.encode 2
                 >> Expect.equal """{
   "p0": 1
