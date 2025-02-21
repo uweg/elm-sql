@@ -97,7 +97,7 @@ selectToString q =
         |> List.map
             (\s ->
                 [ s.table, ".[", s.column, "] ", s.name ]
-                    |> String.join ""
+                    |> String.concat
             )
         |> String.join ",\n"
         |> List.singleton
@@ -120,8 +120,7 @@ selectToString q =
             ]
                 |> List.singleton
     ]
-        |> List.map (List.map (String.join ""))
-        |> List.concat
+        |> List.concatMap (List.map String.concat)
         |> String.join "\n"
 
 

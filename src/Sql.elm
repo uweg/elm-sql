@@ -20,10 +20,12 @@ module Sql exposing
     , field
     , from
     , innerJoin
+    , innerJoinMaybe
     , insert
     , insertColumn
     , insertDefault
     , leftJoin
+    , leftJoinMaybe
     , maybeField
     , orderBy
     , select
@@ -197,6 +199,49 @@ innerJoin (Table j) col operator toTable toColumn t =
     }
 
 
+innerJoinMaybe :
+    Table j j ctor NormalTable
+    -> (j -> Column a defaultJ)
+    -> Operator
+    -> (t -> Table t_ t_ ctor_ NormalTable)
+    -> (t_ -> Column (Maybe a) defaultT)
+    -> SelectInfo p t
+    -> SelectInfo p ( t, Table j j ctor NormalTable )
+innerJoinMaybe (Table j) col operator toTable toColumn t =
+    let
+        (Table t2) =
+            toTable t.select
+
+        (Column c2) =
+            toColumn t2.table
+
+        i =
+            List.length t.join
+
+        alias =
+            "j" ++ String.fromInt i
+    in
+    { select =
+        ( t.select
+        , Table { j | alias = Just alias }
+        )
+    , from = t.from
+    , fromAlias = t.fromAlias
+    , where_ = t.where_
+    , order = t.order
+    , join =
+        { table = j.name
+        , alias = alias
+        , column = col j.table |> (\(Column info) -> info.name)
+        , operator = operator
+        , table2 = t2.alias |> Maybe.withDefault ""
+        , column2 = c2.name
+        , type_ = InnerJoin
+        }
+            :: t.join
+    }
+
+
 leftJoin :
     Table j j ctor NormalTable
     -> (j -> Column a defaultJ)
@@ -206,6 +251,49 @@ leftJoin :
     -> SelectInfo p t
     -> SelectInfo p ( t, Table j j ctor MaybeTable )
 leftJoin (Table j) col operator toTable toColumn t =
+    let
+        (Table t2) =
+            toTable t.select
+
+        (Column c2) =
+            toColumn t2.table
+
+        i =
+            List.length t.join
+
+        alias =
+            "j" ++ String.fromInt i
+    in
+    { select =
+        ( t.select
+        , Table { j | alias = Just alias }
+        )
+    , from = t.from
+    , fromAlias = t.fromAlias
+    , where_ = t.where_
+    , order = t.order
+    , join =
+        { table = j.name
+        , alias = alias
+        , column = col j.table |> (\(Column info) -> info.name)
+        , operator = operator
+        , table2 = t2.alias |> Maybe.withDefault ""
+        , column2 = c2.name
+        , type_ = LeftJoin
+        }
+            :: t.join
+    }
+
+
+leftJoinMaybe :
+    Table j j ctor NormalTable
+    -> (j -> Column a defaultJ)
+    -> Operator
+    -> (t -> Table t_ t_ ctor_ joinTable)
+    -> (t_ -> Column (Maybe a) defaultT)
+    -> SelectInfo p t
+    -> SelectInfo p ( t, Table j j ctor MaybeTable )
+leftJoinMaybe (Table j) col operator toTable toColumn t =
     let
         (Table t2) =
             toTable t.select
@@ -546,12 +634,6 @@ type alias UpdateQueryData p =
     }
 
 
-type alias UpdateParams =
-    { id : Int
-    , name : String
-    }
-
-
 type alias InsertQueryData =
     { table : String
     , columns : List ( String, String )
@@ -612,9 +694,9 @@ type Insert params current result
 
 
 insertColumn :
-    (result -> Column current NoDefault)
+    (result -> Column current default)
     -> (params -> current)
-    -> Insert params (Column current NoDefault -> next) result
+    -> Insert params (Column current default -> next) result
     -> Insert params next result
 insertColumn toColumn param (Insert c) =
     let
